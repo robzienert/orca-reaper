@@ -15,7 +15,3 @@ invocations, we know it has been drained and can be safely terminated.
 Your Orca deployment should be performed via red/black, keeping disabled Orca
 servers until they are terminated by this script. We run our reaper job every
 60 minutes, but your milage may vary.
-
-Assuming you deploy as often as we do, you might see something like this:
-
-![orca-servergroups.png](orca-servergroups.png)
