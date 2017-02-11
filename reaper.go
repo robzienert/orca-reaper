@@ -40,17 +40,18 @@ func Run(config *Config) error {
 		return nil
 	}
 
-	log.Printf("%#v", reapTask)
+	body, err := json.Marshal(reapTask)
+	if err != nil {
+		return errors.Wrap(err, "marshaling reap task to json")
+	}
+
+	log.Println(string(body))
 
 	if config.DryRun {
 		log.Println("dry-run mode enabled, skipping action")
 		return nil
 	}
 
-	body, err := json.Marshal(reapTask)
-	if err != nil {
-		return errors.Wrap(err, "marshaling reap task to json")
-	}
 	req, err := http.NewRequest("POST", orcaTasksURL(config.APIBaseURL), bytes.NewBuffer(body))
 	if err != nil {
 		return errors.Wrap(err, "creating new post request")
