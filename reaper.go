@@ -19,20 +19,31 @@ const (
 )
 
 func Run(config *Config) error {
+	if err := initHTTPClient(config); err != nil {
+		return errors.Wrap(err, "initializing http client")
+	}
+
 	orcaServerGroups, err := getOrcaServerGroups(config.APIBaseURL)
 	if err != nil {
 		return errors.Wrap(err, "could not get orca server groups")
 	}
 
-	tasksStatus, err := getOrcaExecutionsStatus(config.APIBaseURL)
+	executionsStatus, err := getOrcaExecutionsStatus(config.APIBaseURL)
 	if err != nil {
-		return errors.Wrap(err, "could not get orca tasks status")
+		return errors.Wrap(err, "could not get orca executions status")
 	}
 
-	reapTask := buildReapTask(orcaServerGroups, tasksStatus, config)
+	reapTask := buildReapTask(orcaServerGroups, executionsStatus, config)
 
 	if len(reapTask.Job) == 0 {
 		log.Println("nothing to cleanup")
+		return nil
+	}
+
+	log.Printf("%#v", reapTask)
+
+	if config.DryRun {
+		log.Println("dry-run mode enabled, skipping action")
 		return nil
 	}
 
@@ -67,7 +78,8 @@ func getOrcaServerGroups(baseURL string) ([]serverGroup, error) {
 
 	var orcaServerGroups []serverGroup
 	if err := json.NewDecoder(r.Body).Decode(&orcaServerGroups); err != nil {
-		return nil, errors.Wrap(err, "unmarshaling server groups")
+		raw, _ := ioutil.ReadAll(r.Body)
+		return nil, errors.Wrapf(err, "unmarshaling server groups (body: %s)", raw)
 	}
 
 	return orcaServerGroups, nil
@@ -101,25 +113,33 @@ func buildReapTask(orcaServerGroups []serverGroup, tasksStatus map[string]int, c
 		if !serverGroup.Disabled {
 			continue
 		}
+		if config.Cluster != "" && config.Cluster != serverGroup.Cluster {
+			continue
+		}
+
 		if len(serverGroup.Instances) == 0 {
 			destroyJob := destroyServerGroupJob{}
 			destroyJob.Type = "destroyServerGroup"
 			destroyJob.ServerGroupName = serverGroup.Name
 			destroyJob.Region = serverGroup.Region
 			destroyJob.Credentials = serverGroup.Account
+			// TODO rz - Update to allow k8s, etc
+			destroyJob.CloudProvider = "aws"
 			reapTask.Job = append(reapTask.Job, destroyJob)
 			continue
 		}
 		for _, i := range serverGroup.Instances {
-			if i.HealthState != "Up" {
+			// if unhealthy, term
+			if strings.ToLower(i.HealthState) != "up" {
+				termInstancesJob.InstanceIDs = append(termInstancesJob.InstanceIDs, i.ID)
+				continue
+			}
+
+			// unknown or inactive, term
+			execs, ok := tasksStatus[i.ID]
+			if !ok || execs == 0 {
 				termInstancesJob.InstanceIDs = append(termInstancesJob.InstanceIDs, i.ID)
 			}
-		}
-	}
-
-	for instanceID, runningExecutions := range tasksStatus {
-		if runningExecutions == 0 {
-			termInstancesJob.InstanceIDs = append(termInstancesJob.InstanceIDs, instanceID)
 		}
 	}
 
