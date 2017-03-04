@@ -86,14 +86,14 @@ func getOrcaServerGroups(baseURL string) ([]serverGroup, error) {
 	return orcaServerGroups, nil
 }
 
-func getOrcaExecutionsStatus(baseURL string) (map[string]int, error) {
+func getOrcaExecutionsStatus(baseURL string) (map[string]orcaInstance, error) {
 	r, err := httpClient.Get(orcaExecutionsStatusURL(baseURL))
 	if err != nil {
 		return nil, errors.Wrap(err, "requesting orca tasks status")
 	}
 	defer r.Body.Close()
 
-	var status map[string]int
+	var status map[string]orcaInstance
 	if err := json.NewDecoder(r.Body).Decode(&status); err != nil {
 		return nil, errors.Wrap(err, "unmarshaling tasks status")
 	}
@@ -101,7 +101,7 @@ func getOrcaExecutionsStatus(baseURL string) (map[string]int, error) {
 	return status, nil
 }
 
-func buildReapTask(orcaServerGroups []serverGroup, tasksStatus map[string]int, config *Config) task {
+func buildReapTask(orcaServerGroups []serverGroup, executions map[string]orcaInstance, config *Config) task {
 	reapTask := task{}
 	reapTask.Application = "orca"
 	reapTask.Description = "Terminate instances and server groups"
@@ -137,7 +137,7 @@ func buildReapTask(orcaServerGroups []serverGroup, tasksStatus map[string]int, c
 			}
 
 			// unknown or inactive, term
-			execs, ok := tasksStatus[i.ID]
+			execs, ok := getOrcaInstanceExecutions(executions, i.ID)
 			if !ok || execs == 0 {
 				termInstancesJob.InstanceIDs = append(termInstancesJob.InstanceIDs, i.ID)
 			}
@@ -170,4 +170,13 @@ func orcaExecutionsStatusURL(baseURL string) string {
 		return baseURL[1:] + orcaExecutionsStatusPath
 	}
 	return baseURL + orcaExecutionsStatusPath
+}
+
+func getOrcaInstanceExecutions(executions map[string]orcaInstance, instanceID string) (int, bool) {
+	for id, instance := range executions {
+		if instanceID == id {
+			return instance.Count, true
+		}
+	}
+	return 0, false
 }

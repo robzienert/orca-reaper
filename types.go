@@ -38,3 +38,14 @@ type destroyServerGroupJob struct {
 	ServerGroupName string `json:"serverGroupName"`
 	CloudProvider   string `json:"cloudProvider"`
 }
+
+type orcaInstance struct {
+	Overdue    bool                `json:"overdue"`
+	Count      int                 `json:"count"`
+	Executions orcaExecutionDetail `json:"executions"`
+}
+
+type orcaExecutionDetail struct {
+	Application string `json:"application"`
+	URL         string `json:"url"`
+}
