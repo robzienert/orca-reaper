@@ -1,5 +1,7 @@
 # orca-reaper
 
+_**This project is not necessary anymore. Orca's architecture is fundamentally different now**_
+
 A script to that can be used to gracefully terminate Spinnaker Orca instances.
 
 Spinnaker's orchestration service, Orca, currently uses Spring Batch which
